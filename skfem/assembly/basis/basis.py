@@ -28,9 +28,28 @@ class Basis:
     mesh: Mesh
     elem: Element
     tind: Optional[ndarray] = None
+    # Integral weight per sample
     dx: ndarray
+    # Basis evaluation samples at quadrature points.
+    # List is over basis functions, the Tuple indexes over the element types
+    # (in composite elements). The DiscreteField is a named tuple with names
+    # value, grad, div, curl, hess, grad3, grad4, grad5 and grad6.
+    # For example: self.basis[0][1].value are the values of first basis
+    # function ([0]) of the second element type ([1]).
+    # Note that the "first basis function" refers to the collection of basis
+    # functions of all element types in a composite element. That is, only one
+    # of the element types of the whole composite vector contains non-zero
+    # values while all else are zeros.
+    # All of these are [Type] x Ne x Nq ndarrays, where Ne is Number of elements
+    # and Nq is number of quadrature points.
+    # [Type] is the dimensionality of the considered field, e.g.
+    # for .value it is 1 for simple elements, or 2 for a 2-vector-valued fields.
+    # for .grad it is element's geometric dimension * .value's shape.
     basis: List[Tuple[DiscreteField, ...]] = []
+    # Quadrature point positions in reference coordinates as a 2D array.
+    # Each column is a single quadrature position.
     X: ndarray
+    # Quadrature point weights as an 1D vector
     W: ndarray
 
     def __init__(self,
@@ -56,8 +75,7 @@ class Basis:
             # match mapped dofs and global dof numbering
             for itr in range(doflocs.shape[0]):
                 for jtr in range(self.element_dofs.shape[0]):
-                    self.doflocs[itr, self.element_dofs[jtr]] =\
-                        doflocs[itr, :, jtr]
+                    self.doflocs[itr, self.element_dofs[jtr]] = doflocs[itr, :, jtr]
         except Exception:
             warnings.warn("Unable to calculate DOF locations.")
 
@@ -91,6 +109,10 @@ class Basis:
     @property
     def interior_dofs(self):
         return self.dofs.interior_dofs
+
+    @property
+    def macro_dofs(self):
+        return self.dofs.macro_dofs
 
     @property
     def N(self):
@@ -153,7 +175,8 @@ class Basis:
         return {k: self.dofs.get_facet_dofs(facets[k], skip_dofnames=skip)
                 for k in facets}
 
-    def get_dofs(self, facets: Optional[Any] = None) -> Any:
+    def get_dofs(self, facets: Optional[Any] = None,
+                 skip_dofnames: List[str] = None) -> Any:
         """Find global DOF numbers.
 
         Accepts a richer set of types than
@@ -180,9 +203,10 @@ class Basis:
                 if callable(f):
                     return self.mesh.facets_satisfying(f)
                 return f
-            return {k: self.dofs.get_facet_dofs(to_indices(facets[k]))
+            return {k: self.dofs.get_facet_dofs(to_indices(facets[k]),
+                                                skip_dofnames)
                     for k in facets}
-        return self.dofs.get_facet_dofs(facets)
+        return self.dofs.get_facet_dofs(facets, skip_dofnames)
 
     def default_parameters(self):
         """This is used by :func:`skfem.assembly.asm` to get the default
@@ -238,7 +262,7 @@ class Basis:
     def split_indices(self) -> List[ndarray]:
         """Return indices for the solution components."""
         if isinstance(self.elem, ElementComposite):
-            o = np.zeros(4, dtype=np.int_)
+            o = np.zeros(5, dtype=np.int_)
             output: List[ndarray] = []
             for k in range(len(self.elem.elems)):
                 e = self.elem.elems[k]
@@ -246,12 +270,14 @@ class Basis:
                     self.nodal_dofs[o[0]:(o[0] + e.nodal_dofs)].flatten(),
                     self.edge_dofs[o[1]:(o[1] + e.edge_dofs)].flatten(),
                     self.facet_dofs[o[2]:(o[2] + e.facet_dofs)].flatten(),
-                    self.interior_dofs[o[3]:(o[3] + e.interior_dofs)].flatten()
+                    self.interior_dofs[o[3]:(o[3] + e.interior_dofs)].flatten(),
+                    self.macro_dofs[o[4]:(o[4] + e.macro_dofs)].flatten()
                 )).astype(np.int_))
                 o += np.array([e.nodal_dofs,
                                e.edge_dofs,
                                e.facet_dofs,
-                               e.interior_dofs])
+                               e.interior_dofs,
+                               e.macro_dofs])
             return output
         raise ValueError("Basis.elem has only a single component!")
 

@@ -46,6 +46,7 @@ class Element:
     facet_dofs: int = 0
     interior_dofs: int = 0
     edge_dofs: int = 0
+    macro_dofs: int = 0
     maxdeg: int = -1
     dofnames: List[str] = []
     refdom: Type[Refdom] = Refdom
@@ -54,6 +55,14 @@ class Element:
     @property
     def dim(self):
         return self.refdom.dim()
+
+    def __str__(self):
+        return f"{self.__class__}: \n\tdim = {self.dim},"+\
+               f"\n\tnodal_dofs: {self.nodal_dofs}," + \
+               f"\n\tedge_dofs: {self.edge_dofs}," +\
+               f"\n\tfacet_dofs: {self.facet_dofs}," +\
+               f"\n\tinterior_dofs: {self.interior_dofs}," +\
+               f"\n\tmacro_dofs: {self.macro_dofs}."
 
     def orient(self, mapping, i, tind=None):
         """Orient basis functions. By default all = 1."""
@@ -104,7 +113,8 @@ class Element:
         return np.array([self.nodal_dofs * self.refdom.nnodes,
                          self.edge_dofs * self.refdom.nedges,
                          self.facet_dofs * self.refdom.nfacets,
-                         self.interior_dofs])
+                         self.interior_dofs,
+                         self.macro_dofs])
 
     def __mul__(self, other):
 

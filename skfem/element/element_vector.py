@@ -13,6 +13,7 @@ class ElementVector(Element):
         self.facet_dofs = self.elem.facet_dofs * self.dim
         self.interior_dofs = self.elem.interior_dofs * self.dim
         self.edge_dofs = self.elem.edge_dofs * self.dim
+        self.macro_dofs = self.elem.macro_dofs * self.dim
 
         # new names for the vector components
         self.dofnames = [i + "^" + str(j + 1)

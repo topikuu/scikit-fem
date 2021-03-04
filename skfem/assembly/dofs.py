@@ -15,10 +15,12 @@ class DofsView(NamedTuple):
     facet_ix: Union[ndarray, slice] = slice(None)
     edge_ix: Union[ndarray, slice] = slice(None)
     interior_ix: Union[ndarray, slice] = slice(None)
+    macro_ix: Union[ndarray, slice] = slice(None)
     nodal_rows: Union[ndarray, slice] = slice(None)
     facet_rows: Union[ndarray, slice] = slice(None)
     edge_rows: Union[ndarray, slice] = slice(None)
     interior_rows: Union[ndarray, slice] = slice(None)
+    macro_rows: Union[ndarray, slice] = slice(None)
 
     def flatten(self) -> ndarray:
         """Return all DOF indices as a single array."""
@@ -35,6 +37,9 @@ class DofsView(NamedTuple):
                  .flatten()),
                 (self.obj
                  .interior_dofs[self.interior_rows][:, self.interior_ix]
+                 .flatten()),
+                (self.obj
+                 .macro_dofs[self.macro_rows][:, self.macro_ix]
                  .flatten())
             ))
         )
@@ -68,11 +73,13 @@ class DofsView(NamedTuple):
             self.facet_ix,
             self.edge_ix,
             self.interior_ix,
+            self.macro_ix,
             *self._intersect_tuples(
                 (self.nodal_rows,
                  self.facet_rows,
                  self.edge_rows,
-                 self.interior_rows),
+                 self.interior_rows,
+                 self.macro_rows),
                 self._dofnames_to_rows(dofnames)
             )
         )
@@ -92,11 +99,13 @@ class DofsView(NamedTuple):
             self.facet_ix,
             self.edge_ix,
             self.interior_ix,
+            self.macro_ix,
             *self._intersect_tuples(
                 (self.nodal_rows,
                  self.facet_rows,
                  self.edge_rows,
-                 self.interior_rows),
+                 self.interior_rows,
+                 self.macro_rows),
                 self._dofnames_to_rows(dofnames, skip=True)
             )
         )
@@ -139,6 +148,16 @@ class DofsView(NamedTuple):
                              ix=self.interior_ix,
                              rows=self.interior_rows)
 
+    @property
+    def macro(self):
+        return self._by_name(self.macro_dofs[self.macro_rows],
+                             off=(self.nodal_dofs.shape[0]
+                                  + self.facet_dofs.shape[0]
+                                  + self.edge_dofs.shape[0]
+                                  + self.interior_dofs.shape[0]),
+                             ix=self.macro_ix,
+                             rows=self.macro_rows)
+
     def __getattr__(self, attr):
         return getattr(self.obj, attr)
 
@@ -149,7 +168,8 @@ class DofsView(NamedTuple):
             np.union1d(self.nodal_ix, other.nodal_ix),
             np.union1d(self.facet_ix, other.facet_ix),
             np.union1d(self.edge_ix, other.edge_ix),
-            np.union1d(self.interior_ix, other.interior_ix)
+            np.union1d(self.interior_ix, other.interior_ix),
+            np.union1d(self.macro_ix, other.macro_ix)
         )
 
     def __add__(self, other):
@@ -163,6 +183,7 @@ class Dofs:
     facet_dofs: Optional[ndarray] = None
     edge_dofs: Optional[ndarray] = None
     interior_dofs: Optional[ndarray] = None
+    macro_dofs: Optional[ndarray] = None
 
     element_dofs: Optional[ndarray] = None
     N: int = 0
@@ -205,6 +226,13 @@ class Dofs:
             np.arange(element.interior_dofs * topo.nelements, dtype=np.int64),
             (element.interior_dofs, topo.nelements),
             order='F') + offset
+        offset += element.interior_dofs * topo.nelements
+
+        # macro dofs
+        self.macro_dofs = np.reshape(np.arange(element.macro_dofs,
+                                               dtype=np.int64),
+                                     (element.macro_dofs, 1),
+                                     order='F') + offset
 
         # global numbering
         self.element_dofs = np.zeros((0, topo.nelements), dtype=np.int64)
@@ -235,6 +263,11 @@ class Dofs:
         # interior dofs
         self.element_dofs = np.vstack((self.element_dofs,
                                        self.interior_dofs))
+
+
+        self.element_dofs = np.vstack((self.element_dofs,
+                                       np.repeat(self.macro_dofs,
+                                                 topo.nelements, axis=1)))
 
         # total dofs
         self.N = np.max(self.element_dofs) + 1
@@ -273,7 +306,8 @@ class Dofs:
             nodal_ix,
             facet_ix,
             edge_ix,
-            np.empty((0,), dtype=np.int64),
+            np.empty((0,), dtype=np.int64), # Interior
+            np.empty((0,), dtype=np.int64), # Macro
             *self._dofnames_to_rows(skip_dofnames, skip=True)
         )
 
@@ -318,6 +352,7 @@ class Dofs:
         n_facet = self.facet_dofs.shape[0]
         n_edge = self.edge_dofs.shape[0]
         n_interior = self.interior_dofs.shape[0]
+        n_macro = self.macro_dofs.shape[0]
 
         nodal_rows = []
         for i in range(n_nodal):
@@ -340,9 +375,17 @@ class Dofs:
                      dofnames):
                 interior_rows.append(i)
 
+        macro_rows = []
+        for i in range(n_macro):
+            if check(self.element.dofnames[i + n_nodal + n_facet + n_edge +
+                                           n_interior],
+                     dofnames):
+                macro_rows.append(i)
+
         return (
             nodal_rows if len(nodal_rows) > 0 else slice(0, 0),
             facet_rows if len(facet_rows) > 0 else slice(0, 0),
             edge_rows if len(edge_rows) > 0 else slice(0, 0),
-            interior_rows if len(interior_rows) > 0 else slice(0, 0)
+            interior_rows if len(interior_rows) > 0 else slice(0, 0),
+            macro_rows if len(macro_rows) > 0 else slice(0, 0)
         )

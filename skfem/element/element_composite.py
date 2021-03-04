@@ -21,6 +21,7 @@ class ElementComposite(Element):
         self.edge_dofs = sum([e.edge_dofs for e in self.elems])
         self.facet_dofs = sum([e.facet_dofs for e in self.elems])
         self.interior_dofs = sum([e.interior_dofs for e in self.elems])
+        self.macro_dofs = sum([e.macro_dofs for e in self.elems])
         self.maxdeg = sum([e.maxdeg for e in self.elems])
 
         for e in self.elems:
@@ -42,6 +43,13 @@ class ElementComposite(Element):
             for j in range(e.nodal_dofs + e.edge_dofs + e.facet_dofs,
                            (e.nodal_dofs + e.edge_dofs
                             + e.facet_dofs + e.interior_dofs)):
+                dofnames.append(e.dofnames[j] + "^" + str(i + 1))
+        for i, e in enumerate(self.elems):  # macro
+            for j in range(e.nodal_dofs + e.edge_dofs
+                           + e.facet_dofs + e.interior_dofs,
+                           (e.nodal_dofs + e.edge_dofs
+                            + e.facet_dofs + e.interior_dofs
+                            + e.macro_dofs)):
                 dofnames.append(e.dofnames[j] + "^" + str(i + 1))
         self.dofnames = dofnames
 
@@ -81,6 +89,10 @@ class ElementComposite(Element):
             tmp = sum([[j] * self.elems[j].interior_dofs
                        for j in range(len(self.elems))], [])
             ns += sum([tmp for j in range(int(counts[3] / len(tmp)))], [])
+        if counts[4] > 0:
+            tmp = sum([[j] * self.elems[j].macro_dofs
+                       for j in range(len(self.elems))], [])
+            ns += sum([tmp for j in range(int(counts[4] / len(tmp)))], [])
 
         mask = np.array(ns)
         inds = mask.copy()
