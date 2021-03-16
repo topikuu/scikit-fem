@@ -9,7 +9,9 @@ from skfem.mapping import Mapping
 from skfem.mesh import Mesh
 from skfem.quadrature import get_quadrature
 from skfem.refdom import Refdom
+from skfem.generic_utils import HashableNdArray
 
+from functools import lru_cache
 
 class Basis:
     """Finite element basis at global quadrature points.
@@ -97,8 +99,15 @@ class Basis:
     @property
     def element_dofs(self):
         if self.tind is None:
+            return self.get_element_dofs(None)
+        else:
+            return self.get_element_dofs(HashableNdArray(self.tind))
+
+    @lru_cache(maxsize=128)
+    def get_element_dofs(self, tind):
+        if tind is None:
             return self.dofs.element_dofs
-        return self.dofs.element_dofs[:, self.tind]
+        return self.dofs.element_dofs[:, tind]
 
     def complement_dofs(self, *D):
         if type(D[0]) is dict:
